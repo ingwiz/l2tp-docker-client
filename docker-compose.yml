@@ -1,0 +1,73 @@
+version: "3.8"
+
+# Network namespace is owned by `ipsec`. Both `l2tp` and `socks5` join it
+# via network_mode, so they all see the same interfaces (eth0, ppp0).
+# Port 1080 is published on the `ipsec` service because it owns the namespace.
+#
+# Startup order:
+#   ipsec  →  (IPSec SA established, esp XFRM states appear)
+#   l2tp   →  (L2TP connects, ppp0 appears)
+#   socks5 →  (Dante binds ppp0 as external interface)
+
+services:
+
+  # ── Container 1: libreswan IKEv1 IPSec ────────────────────────────────────
+  ipsec:
+    build: ./ipsec
+    container_name: l2tp-ipsec
+    privileged: true
+    environment:
+      - VPN_SERVER_IPV4
+      - VPN_PSK
+    volumes:
+      - /lib/modules:/lib/modules:ro
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.accept_redirects=0
+      - net.ipv4.conf.all.send_redirects=0
+    ports:
+      - "1080:1080"
+    healthcheck:
+      # Healthy when at least one ESP XFRM state exists (SA is established)
+      test: ["CMD-SHELL", "ip xfrm state | grep -q 'proto esp'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Container 2: xl2tpd + pppd ────────────────────────────────────────────
+  l2tp:
+    build: ./l2tp
+    container_name: l2tp-daemon
+    network_mode: "service:ipsec"
+    privileged: true
+    devices:
+      - /dev/ppp
+    environment:
+      - VPN_SERVER_IPV4
+      - VPN_USERNAME
+      - VPN_PASSWORD
+    depends_on:
+      ipsec:
+        condition: service_healthy
+    healthcheck:
+      # Healthy when ppp0 is a live point-to-point link
+      test: ["CMD-SHELL", "ip link show ppp0 2>/dev/null | grep -q POINTOPOINT"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Container 3: Dante SOCKS5 ─────────────────────────────────────────────
+  socks5:
+    build: ./dante
+    container_name: l2tp-socks5
+    network_mode: "service:ipsec"
+    depends_on:
+      l2tp:
+        condition: service_healthy
+    restart: unless-stopped
