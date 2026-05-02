@@ -34,8 +34,8 @@ conn L2TP-PSK
     leftprotoport=17/1701
     right=${VPN_SERVER_IPV4}
     rightprotoport=17/1701
-    ike=aes256-sha1;modp1024,aes128-sha1;modp1024,3des-sha1;modp1024
-    phase2alg=aes256-sha1,aes128-sha1,3des-sha1
+    ike=aes256-sha1;modp1024,aes128-sha1;modp1024
+    phase2alg=aes256-sha1,aes128-sha1
     ikev2=never
 EOF
 
