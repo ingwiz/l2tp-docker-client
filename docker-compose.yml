@@ -55,7 +55,7 @@ services:
         condition: service_healthy
     healthcheck:
       # Healthy when ppp0 is a live point-to-point link
-      test: ["CMD-SHELL", "ip link show ppp0 2>/dev/null | grep -q POINTOPOINT"]
+      test: ["CMD-SHELL", "ip link show ppp0 | grep -q POINTOPOINT"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -67,6 +67,15 @@ services:
     build: ./dante
     container_name: l2tp-socks5
     network_mode: "service:ipsec"
+    # Pass every PROXY_USER_<N> variable from the host / .env file into the
+    # container. Bare-name entries (no =value) inherit from the outer env.
+    # Add as many entries as needed; unused ones are silently ignored.
+    environment:
+      - PROXY_USER_1
+      - PROXY_USER_2
+      - PROXY_USER_3
+      - PROXY_USER_4
+      - PROXY_USER_5
     depends_on:
       l2tp:
         condition: service_healthy
